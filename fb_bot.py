@@ -1,6 +1,9 @@
+import os
 import time
+import threading
 import requests
 import feedparser
+from flask import Flask
 
 # ==========================================
 # 1. YOUR FEED & WEBHOOK CONFIGURATION
@@ -89,7 +92,7 @@ ROUTES = [
     }
 ]
 
-CHECK_INTERVAL = 600  # 10 minutes (in seconds)
+CHECK_INTERVAL = 600  # 10 minutes
 seen_posts = set()
 
 # ==========================================
@@ -97,7 +100,6 @@ seen_posts = set()
 # ==========================================
 
 def determine_webhook(content):
-    """Scan post text against defined keyword lists."""
     content_lower = content.lower()
     for route in ROUTES:
         for keyword in route["keywords"]:
@@ -132,18 +134,17 @@ def check_facebook_feed():
                         print(f"✅ Successfully routed to [{route_name}]: {post_title[:35]}...")
                         seen_posts.add(post_id)
                     else:
-                        print(f"❌ Failed to send to Discord (Status {response.status_code})")
+                        print(f"❌ Failed sending to Discord (Status {response.status_code})")
                 else:
                     print(f"ℹ️ Skipping post (no matching keywords found): {post_title[:35]}...")
                     seen_posts.add(post_id)
     except Exception as e:
         print(f"⚠️ Error checking feed: {e}")
 
-# ==========================================
-# 4. SCRIPT RUNNER
-# ==========================================
-
-if __name__ == "__main__":
+def feed_loop():
+    """Background worker thread."""
+    # Slight sleep on start to ensure Flask binds port first
+    time.sleep(2)
     try:
         initial_feed = feedparser.parse(RSS_FEED_URL)
         for entry in initial_feed.entries:
@@ -152,12 +153,24 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"⚠️ Initial feed parse error: {e}")
 
-    print("🚀 Bot started! Monitoring feed with keyword routing...")
-
+    print("🚀 Bot background loop started!")
     while True:
-        try:
-            check_facebook_feed()
-        except Exception as e:
-            print(f"⚠️ Error encountered during check: {e}")
-        
+        check_facebook_feed()
         time.sleep(CHECK_INTERVAL)
+
+# ==========================================
+# 4. FLASK SERVER SETUP
+# ==========================================
+app = Flask(__name__)
+
+@app.route('/')
+def home():
+    return "Facebook to Discord Router Bot is running live!", 200
+
+# Start background feed monitor
+worker_thread = threading.Thread(target=feed_loop, daemon=True)
+worker_thread.start()
+
+if __name__ == '__main__':
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host='0.0.0.0', port=port)
