@@ -163,9 +163,9 @@ def feed_loop():
 # ==========================================
 app = Flask(__name__)
 
-@app.route('/')
+@app.route('/', methods=['GET', 'HEAD'])
 def home():
-    return "Facebook to Discord Router Bot is running live!", 200
+    return "OK", 200
 
 # Start background feed monitor
 worker_thread = threading.Thread(target=feed_loop, daemon=True)
