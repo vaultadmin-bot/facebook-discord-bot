@@ -28,7 +28,7 @@ ROUTES = [
     {
         "name": "Magic: The Gathering",
         "keywords": [
-            "magic", "mtg", "#mtg", "commander", "edh", "draft", 
+            "magic", "mtg", "#mtg", "commander", "edh", "prerelease", "draft", 
             "modern", "pioneer", "standard", "wizards", "wotc", "secret lair", 
             "collector booster", "play booster", "mana", "planeswalker"
         ],
@@ -108,11 +108,11 @@ def determine_webhook(content):
     return GENERAL_WEBHOOK, "General Announcements"
 
 def check_facebook_feed():
-    print("Checking Facebook RSS feed for new posts...")
+    print("🔍 Checking Facebook RSS feed for new posts...", flush=True)
     try:
         feed = feedparser.parse(RSS_FEED_URL)
         if not feed.entries:
-            print("ℹ️ Feed checked: No entries found or feed is empty.")
+            print("ℹ️ Feed checked: No entries found or feed is empty.", flush=True)
             return
 
         for entry in reversed(feed.entries):
@@ -129,37 +129,35 @@ def check_facebook_feed():
                     payload = {
                         "content": f"📢 **New {route_name} Post!**\n\n{post_title}\n\n🔗 {entry.link}"
                     }
-                    response = requests.post(target_webhook, json=payload)
+                    response = requests.post(target_webhook, json=payload, timeout=10)
                     if response.status_code in [200, 204]:
-                        print(f"✅ Successfully routed to [{route_name}]: {post_title[:35]}...")
+                        print(f"✅ Successfully routed to [{route_name}]: {post_title[:35]}...", flush=True)
                         seen_posts.add(post_id)
                     else:
-                        print(f"❌ Failed sending to Discord (Status {response.status_code})")
+                        print(f"❌ Failed sending to Discord (Status {response.status_code}) - Verify Webhook URL!", flush=True)
                 else:
-                    print(f"ℹ️ Skipping post (no matching keywords found): {post_title[:35]}...")
+                    print(f"ℹ️ Skipping post (no matching keywords found): {post_title[:35]}...", flush=True)
                     seen_posts.add(post_id)
     except Exception as e:
-        print(f"⚠️ Error checking feed: {e}")
+        print(f"⚠️ Error checking feed: {e}", flush=True)
 
 def feed_loop():
-    """Background worker thread."""
-    # Slight sleep on start to ensure Flask binds port first
-    time.sleep(2)
+    time.sleep(3)
     try:
         initial_feed = feedparser.parse(RSS_FEED_URL)
         for entry in initial_feed.entries:
             seen_posts.add(entry.id if 'id' in entry else entry.link)
-        print(f"📦 Initialized seen posts ({len(seen_posts)} existing posts recorded).")
+        print(f"📦 Initialized seen posts ({len(seen_posts)} existing posts recorded).", flush=True)
     except Exception as e:
-        print(f"⚠️ Initial feed parse error: {e}")
+        print(f"⚠️ Initial feed parse error: {e}", flush=True)
 
-    print("🚀 Bot background loop started!")
+    print("🚀 Bot background loop started!", flush=True)
     while True:
         check_facebook_feed()
         time.sleep(CHECK_INTERVAL)
 
 # ==========================================
-# 4. FLASK SERVER SETUP
+# 4. FLASK SERVER & BACKGROUND LAUNCH
 # ==========================================
 app = Flask(__name__)
 
@@ -167,9 +165,9 @@ app = Flask(__name__)
 def home():
     return "OK", 200
 
-# Start background feed monitor
-worker_thread = threading.Thread(target=feed_loop, daemon=True)
-worker_thread.start()
+# Start background worker immediately when file is imported/run
+daemon_thread = threading.Thread(target=feed_loop, daemon=True)
+daemon_thread.start()
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 10000))
